@@ -90,7 +90,21 @@ app.patch('/api/orders/:id', auth, async (req, res) => {
   if (!['new','accepted','preparing','ready','out_for_delivery','completed','rejected'].includes(status)) return res.status(400).send('Invalid status');
   const { data, error } = await supabase.from('orders').update({ status }).eq('id', req.params.id).select();
   if (error) return res.status(400).json({ error: error.message });
-  res.json((data || [])[0] || { ok: true });
+  const order = (data || [])[0];
+  if (status === 'completed' && order) {
+    const day = new Date(order.created_at).toISOString().slice(0,10);
+    const { data: existing } = await supabase.from('daily_earnings').select('revenue,order_count').eq('day', day).single();
+    const newRevenue = (existing ? Number(existing.revenue) : 0) + (Number(order.total) || 0);
+    const newCount = (existing ? existing.order_count : 0) + 1;
+    await supabase.from('daily_earnings').upsert({ day, revenue: newRevenue, order_count: newCount, updated_at: new Date().toISOString() });
+  }
+  res.json(order || { ok: true });
+});
+
+app.get('/api/earnings', auth, async (req, res) => {
+  const { data, error } = await supabase.from('daily_earnings').select('*').order('day', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
 });
 
 app.get('/api/settings', async (req, res) => {
