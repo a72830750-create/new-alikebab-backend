@@ -13,7 +13,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '';
 const TOKEN_SECRET = process.env.TOKEN_SECRET || '';
-const validTokens = new Map();
 
 function verifyPassword(pw) {
   const [salt, hash] = PASSWORD_HASH.split(':');
@@ -22,29 +21,35 @@ function verifyPassword(pw) {
   return crypto.timingSafeEqual(Buffer.from(h, 'hex'), Buffer.from(hash, 'hex'));
 }
 
+function signToken() {
+  const exp = Date.now() + 3600000 * 24 * 7;
+  const payload = Buffer.from(JSON.stringify({ exp })).toString('base64url');
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET || 'secret').update(payload).digest('base64url');
+  return payload + '.' + sig;
+}
+function verifyToken(t) {
+  const parts = (t || '').split('.');
+  if (parts.length !== 2) return false;
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET || 'secret').update(parts[0]).digest('base64url');
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(parts[1]))) return false;
+  try { const p = JSON.parse(Buffer.from(parts[0], 'base64url').toString()); return p.exp > Date.now(); } catch(e){ return false; }
+}
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const t = h.startsWith('Bearer ') ? h.slice(7) : '';
-  const exp = validTokens.get(t);
-  if (!exp || Date.now() > exp) { validTokens.delete(t); return res.status(401).send('Unauthorized'); }
+  if (!verifyToken(t)) return res.status(401).send('Unauthorized');
   next();
 }
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
   if (username === 'alikebab' && verifyPassword(password)) {
-    const token = crypto.randomBytes(32).toString('hex');
-    validTokens.set(token, Date.now() + 3600000);
-    return res.json({ token });
+    return res.json({ token: signToken() });
   }
   res.status(401).send('Unauthorized');
 });
 
-app.post('/api/logout', auth, (req, res) => {
-  const h = req.headers.authorization || '';
-  validTokens.delete(h.startsWith('Bearer ') ? h.slice(7) : '');
-  res.json({ ok: true });
-});
+app.post('/api/logout', (req, res) => { res.json({ ok: true }); });
 
 app.get('/api/orders', auth, async (req, res) => {
   const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
