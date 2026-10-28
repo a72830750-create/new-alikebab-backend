@@ -115,7 +115,7 @@ app.get('/api/settings', async (req, res) => {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
   const mins = now.getHours()*60 + now.getMinutes();
   const open = mins >= 11*60 && mins <= 23*60+55;
-  if (!open) obj.accepting_orders = 'false';
+  obj.accepting_orders = open ? 'true' : 'false';
   res.json(obj);
 });
 
