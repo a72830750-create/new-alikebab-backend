@@ -111,6 +111,11 @@ app.get('/api/settings', async (req, res) => {
   const { data } = await supabase.from('settings').select('*');
   const obj = {};
   (data || []).forEach(r => obj[r.key] = r.value);
+  // auto close outside opening hours (11:00-23:55)
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+  const mins = now.getHours()*60 + now.getMinutes();
+  const open = mins >= 11*60 && mins <= 23*60+55;
+  if (!open) obj.accepting_orders = 'false';
   res.json(obj);
 });
 
