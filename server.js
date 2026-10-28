@@ -43,7 +43,7 @@ function auth(req, res, next) {
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
-  if (username === 'faridkebab' && verifyPassword(password)) {
+  if (username === 'alikebab' && verifyPassword(password)) {
     return res.json({ token: signToken() });
   }
   res.status(401).send('Unauthorized');
